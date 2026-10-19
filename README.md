@@ -428,3 +428,5 @@ yeelight-re/
 ## Disclaimer
 
 Project ini tidak berafiliasi dengan Yeelight/Yeelink. Reverse engineering dilakukan untuk interoperabilitas dan kontrol perangkat milik sendiri. Membuka bulb berarti berurusan dengan tegangan listrik 110–240 V AC; jangan lakukan tanpa alat dan pengetahuan keselamatan yang memadai. Garansi bisa hilang. Gunakan dengan risiko sendiri.
+#   y e e l i g h t - r e  
+ 
