@@ -1,0 +1,17 @@
+# Contoh respons SSDP dari YLDP06YL (color2). Baris kosong di akhir wajib.
+HTTP/1.1 200 OK
+Cache-Control: max-age=3600
+Location: yeelight://192.168.1.20:55443
+Server: POSIX UPnP/1.0 YGLC/1
+id: 0x0000000012345678
+model: color2
+fw_ver: 18
+support: get_prop set_default set_power toggle set_bright start_cf stop_cf set_scene cron_add cron_get cron_del set_ct_abx set_rgb set_hsv set_adjust adjust_bright adjust_ct adjust_color set_music set_name
+power: on
+bright: 40
+color_mode: 2
+ct: 3200
+rgb: 16737792
+hue: 30
+sat: 100
+name: Kamar

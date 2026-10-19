@@ -1,0 +1,40 @@
+# Contoh sesi TCP 55443 dengan YLDP06YL. Setiap baris diakhiri CRLF.
+# Baris dengan "->" adalah request dari client; "<-" adalah balasan/notifikasi bulb.
+
+-> {"id":1,"method":"get_prop","params":["power","bright","ct","rgb","hue","sat","color_mode","flowing","music_on","name"]}
+<- {"id":1,"result":["on","40","3200","16737792","30","100","2","0","0","Kamar"]}
+
+-> {"id":2,"method":"set_power","params":["on","smooth",300]}
+<- {"id":2,"result":["ok"]}
+
+-> {"id":3,"method":"set_bright","params":[70,"smooth",300]}
+<- {"id":3,"result":["ok"]}
+<- {"method":"props","params":{"bright":"70"}}
+
+-> {"id":4,"method":"set_rgb","params":[65280,"smooth",300]}
+<- {"id":4,"result":["ok"]}
+<- {"method":"props","params":{"rgb":"65280","color_mode":"2"}}
+
+-> {"id":5,"method":"set_ct_abx","params":[3200,"smooth",300]}
+<- {"id":5,"result":["ok"]}
+<- {"method":"props","params":{"ct":"3200","color_mode":"1"}}
+
+-> {"id":6,"method":"set_scene","params":["color",16711680,100]}
+<- {"id":6,"result":["ok"]}
+<- {"method":"props","params":{"power":"on","rgb":"16711680","bright":"100","color_mode":"2"}}
+
+-> {"id":7,"method":"start_cf","params":[0,1,"500,1,16711680,100,500,1,255,100"]}
+<- {"id":7,"result":["ok"]}
+<- {"method":"props","params":{"flowing":"1"}}
+
+-> {"id":8,"method":"stop_cf","params":[]}
+<- {"id":8,"result":["ok"]}
+<- {"method":"props","params":{"flowing":"0"}}
+
+-> {"id":9,"method":"set_name","params":["Lampu Kamar"]}
+<- {"id":9,"result":["ok"]}
+<- {"method":"props","params":{"name":"Lampu Kamar"}}
+
+# Error example: method yang tidak didukung
+-> {"id":10,"method":"set_bg_power","params":["on"]}
+<- {"id":10,"error":{"code":-4,"message":"method not supported"}}

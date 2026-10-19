@@ -1,0 +1,22 @@
+# Music mode: client 192.168.1.10, bulb 192.168.1.20.
+# TCP 55443 tetap dipakai untuk command; UDP hanya untuk notifikasi dari bulb.
+
+-> {"id":20,"method":"set_music","params":[1,"192.168.1.10",54321]}
+<- {"id":20,"result":["ok"]}
+
+# Setelah ini, bulb mengirim props ke UDP 192.168.1.10:54321.
+# Datagram UDP (tanpa framing TCP):
+<- {"method":"props","params":{"music_on":"1"}}
+<- {"method":"props","params":{"rgb":"16711680","color_mode":"2"}}
+<- {"method":"props","params":{"rgb":"65280","color_mode":"2"}}
+
+# Command tetap lewat TCP, tanpa quota 60/menit:
+-> {"id":21,"method":"set_rgb","params":[16711680,"sudden",0]}
+<- {"id":21,"result":["ok"]}
+-> {"id":22,"method":"set_rgb","params":[65280,"sudden",0]}
+<- {"id":22,"result":["ok"]}
+
+# Keluar dari music mode:
+-> {"id":23,"method":"set_music","params":[0]}
+<- {"id":23,"result":["ok"]}
+<- {"method":"props","params":{"music_on":"0"}}

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yeelight-re"
+version = "0.3.0"
+description = "Local, account-free reverse engineering toolkit for Yeelight YLDP06YL (color2) bulbs"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["yeelight", "yldp06yl", "color2", "lan", "reverse-engineering", "smart-home"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Home Automation",
+]
+dependencies = []
+
+[project.scripts]
+yeelight-re = "yeelight_re.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["yeelight_re*"]
