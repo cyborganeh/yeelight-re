@@ -4,22 +4,26 @@ from __future__ import annotations
 
 import argparse
 import colorsys
+import ipaddress
 import json
 import math
 import os
+import subprocess
 import sys
 import time
 import webbrowser
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from .client import MusicMode, YeelightClient, parse_json_argument
 from .discovery import (
+    BulbHit,
     discover,
     format_device,
     local_ipv4,
     probe_port,
-    scan_subnet,
+    scan_lan,
     unique_by_ip,
 )
 from .miio import MIIO_PORT
@@ -110,12 +114,13 @@ def _print_status(status: dict[str, Any]) -> str:
 
 def _print_device(device: Device, index: int | None = None) -> str:
     position = f"[{index}] " if index is not None else ""
+    support = f"{len(device.support)} methods" if device.support else "tidak diketahui"
     return (
         f"{position}{device.ip}:{device.port}\n"
         f"     model   : {device.model or '?'}\n"
         f"     firmware: {device.fw_ver or '?'}\n"
         f"     name    : {device.name or '(empty)'}\n"
-        f"     support : {len(device.support)} methods"
+        f"     support : {support}"
     )
 
 
@@ -124,16 +129,37 @@ def _print_device(device: Device, index: int | None = None) -> str:
 
 def cmd_discover(args: argparse.Namespace) -> int:
     devices = unique_by_ip(discover(timeout=args.timeout))
-    scan_results: list[str] = []
+    scanned: list[BulbHit] = []
     if args.scan:
-        scan_results = scan_subnet(args.subnet, timeout=args.scan_timeout)
+        # SSDP is cheap but many routers drop multicast, so a subnet scan runs
+        # as a fallback when nothing answered.
+        scanned = scan_lan(
+            args.subnet,
+            timeout=args.scan_timeout,
+            workers=args.workers,
+        )
+        known = {device.ip for device in devices}
+        for hit in scanned:
+            if hit.is_bulb and hit.ip not in known:
+                devices.append(
+                    Device(
+                        ip=hit.ip,
+                        port=hit.port,
+                        model=hit.model,
+                        name=hit.name,
+                        power=hit.power,
+                        bright=hit.bright,
+                    )
+                )
+                known.add(hit.ip)
+        devices.sort(key=lambda item: ipaddress.ip_address(item.ip))
 
     if args.json:
         print(
             json.dumps(
                 {
                     "devices": [device.as_dict() for device in devices],
-                    "open_ports": scan_results,
+                    "scan": [hit.as_dict() for hit in scanned],
                 },
                 indent=2,
                 ensure_ascii=False,
@@ -149,8 +175,10 @@ def cmd_discover(args: argparse.Namespace) -> int:
     else:
         print("No Yeelight device answered SSDP.")
 
-    if scan_results:
-        print(f"Hosts with TCP {CONTROL_PORT} open: {', '.join(scan_results)}")
+    if scanned:
+        print(f"Subnet scan (TCP {CONTROL_PORT}):")
+        for hit in scanned:
+            print(f"  {hit.label}")
 
     if not devices:
         print(
@@ -158,27 +186,60 @@ def cmd_discover(args: argparse.Namespace) -> int:
             "  1. Bulb is powered and on the same L2 network (2.4 GHz Wi-Fi).\n"
             "  2. LAN Control / Developer Mode is enabled in the Yeelight app.\n"
             "  3. Windows firewall allows UDP replies from the bulb.\n"
-            "  4. Try: yeelight-re scan --subnet 192.168.1.0/24"
+            f"  4. IP berubah? Jalankan: {_program()} scan"
         )
     return 0
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
-    hosts = scan_subnet(args.subnet, timeout=args.connect_timeout)
+    hits = scan_lan(
+        args.subnet,
+        timeout=args.connect_timeout,
+        workers=args.workers,
+        identify_timeout=args.identify_timeout,
+    )
+    bulbs = [hit for hit in hits if hit.is_bulb]
+    others = [hit for hit in hits if not hit.is_bulb]
+
     if args.json:
-        print(json.dumps({"open_ports": hosts}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "bulbs": [hit.as_dict() for hit in bulbs],
+                    "open_ports": [hit.as_dict() for hit in others],
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
         return 0
-    if not hosts:
-        print(f"No host accepted TCP {CONTROL_PORT}.")
-        return 0
-    print(f"Hosts with TCP {CONTROL_PORT} open:\n")
-    for host in hosts:
-        try:
-            with YeelightClient(host, timeout=2.0) as client:
-                status = client.status()
-            print(f"{host}  {status.get('name') or '(unnamed)'}  {status.get('power')}")
-        except YeelightError as exc:
-            print(f"{host}  (port open, but not a Yeelight LAN endpoint: {exc})")
+
+    if bulbs:
+        print(f"Lampu Yeelight ditemukan: {len(bulbs)}\n")
+        for hit in bulbs:
+            print(f"  {hit.label}")
+            print(
+                f"     model {hit.model or '?'} | power {hit.power or '?'} | "
+                f"bright {hit.bright if hit.bright is not None else '?'}% | "
+                f"name {hit.name or '(kosong)'}"
+            )
+        if len(bulbs) == 1:
+            print(f"\nPakai: {_program()} status --ip {bulbs[0].ip}")
+        else:
+            print("\nPilih salah satu IP di atas untuk --ip.")
+    else:
+        print(f"Tidak ada lampu Yeelight yang menjawab di subnet ini.")
+
+    if others:
+        print(f"\nHost lain dengan TCP {CONTROL_PORT} terbuka (bukan Yeelight):")
+        for hit in others:
+            print(f"  {hit.ip}:{hit.port}  {hit.error or 'tidak menjawab get_prop'}")
+
+    if not hits:
+        print(
+            "Pastikan PC dan lampu berada di jaringan yang sama. "
+            "Coba tentukan subnet manual: --subnet 192.168.1.0/24"
+        )
     return 0
 
 
@@ -523,6 +584,30 @@ def cmd_web(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_gui(args: argparse.Namespace) -> int:
+    argv: list[str] = []
+    ip = args.ip or os.environ.get("YEELIGHT_IP")
+    if ip:
+        argv += ["--ip", ip]
+    if args.port:
+        argv += ["--port", str(args.port)]
+    try:
+        from .gui import main as gui_main
+    except ImportError:
+        # The console build excludes Tkinter to stay small; hand over to the
+        # GUI executable that ships next to it.
+        sibling = Path(sys.executable).with_name("yeelight-re-gui.exe")
+        if getattr(sys, "frozen", False) and sibling.is_file():
+            print(f"Membuka {sibling.name}...")
+            subprocess.Popen([str(sibling), *argv])
+            return 0
+        raise YeelightError(
+            "Tkinter is not available in this Python build; "
+            "run yeelight-re-gui.exe instead"
+        )
+    return int(gui_main(argv) or 0)
+
+
 def cmd_raw(args: argparse.Namespace) -> int:
     if args.params_json:
         params = parse_json_argument(args.params_json)
@@ -633,12 +718,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scan", action="store_true", help="also scan the local subnet")
     p.add_argument("--subnet", help="subnet for --scan, e.g. 192.168.1.0/24")
     p.add_argument("--scan-timeout", type=float, default=0.25)
+    p.add_argument("--workers", type=int, default=128, help="parallel probes")
     p.set_defaults(func=cmd_discover)
 
-    p = sub.add_parser("scan", help="scan a subnet for open TCP 55443")
+    p = sub.add_parser(
+        "scan",
+        help="scan a subnet and identify every bulb (use when the IP changed)",
+    )
     _add_common(p, host=False)
-    p.add_argument("--subnet", help="subnet, default: local /24")
+    p.add_argument("--subnet", help="subnet, default: every local /24")
     p.add_argument("--connect-timeout", type=float, default=0.25)
+    p.add_argument("--identify-timeout", type=float, default=2.0)
+    p.add_argument("--workers", type=int, default=128)
     p.set_defaults(func=cmd_scan)
 
     p = sub.add_parser("status", help="read power, brightness, colour and name")
@@ -728,6 +819,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--token", help="32 hex chars, only if the handshake hides the token")
     p.add_argument("--miio-port", type=int, default=MIIO_PORT, help="miIO UDP port")
     p.add_argument("--port", type=int, default=CONTROL_PORT, help="control TCP port to verify")
+    p.add_argument("--timeout", type=float, default=3.0, help="UDP timeout in seconds")
     p.add_argument("--enable", action="store_true", help="send set_ps cfg_lan_ctrl=1")
     p.add_argument("--wifi-ssid", help="Wi-Fi SSID to provision to bulb in AP mode")
     p.add_argument("--wifi-pass", default="", help="Wi-Fi password to provision")
@@ -757,6 +849,11 @@ def build_parser() -> argparse.ArgumentParser:
             )
         )
     )
+
+    p = sub.add_parser("gui", help="open the desktop GUI (Tkinter)")
+    p.add_argument("--ip", help="pre-fill this bulb IPv4 address (or set YEELIGHT_IP)")
+    p.add_argument("--port", type=int, default=CONTROL_PORT, help="pre-fill the control TCP port")
+    p.set_defaults(func=cmd_gui)
 
     p = sub.add_parser("web", help="start a local dashboard (no cloud)")
     _add_common(p)

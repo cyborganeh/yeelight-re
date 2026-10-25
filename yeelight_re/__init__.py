@@ -1,7 +1,15 @@
 """Local, account-free control for Yeelight YLDP06YL (color2) bulbs."""
 
 from .client import MusicMode, YeelightClient
-from .discovery import discover, scan_subnet
+from .discovery import (
+    BulbHit,
+    discover,
+    identify,
+    local_ipv4s,
+    local_subnets,
+    scan_lan,
+    scan_subnet,
+)
 from .miio import (
     MiioClient,
     MiioError,
@@ -22,6 +30,7 @@ from .protocol import (
 __version__ = "0.3.0"
 
 __all__ = [
+    "BulbHit",
     "CommandError",
     "Device",
     "LanControlDisabled",
@@ -35,7 +44,11 @@ __all__ = [
     "YeelightTimeout",
     "discover",
     "enable_lan_control",
+    "identify",
+    "local_ipv4s",
+    "local_subnets",
     "miio_probe",
     "provision_wifi",
+    "scan_lan",
     "scan_subnet",
 ]

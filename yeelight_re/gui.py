@@ -27,7 +27,7 @@ from tkinter import colorchooser, messagebox, simpledialog, ttk
 from typing import Any, Callable
 
 from .client import MusicMode, YeelightClient
-from .discovery import discover, local_ipv4, probe_port, unique_by_ip
+from .discovery import discover, local_ipv4, probe_port, scan_lan, unique_by_ip
 from .miio import (
     MIIO_PORT,
     MiioError,
@@ -126,6 +126,7 @@ class YeelightGui(tk.Tk):
 
         self.ip_var = tk.StringVar(value=ip or saved.get("ip", ""))
         self.port_var = tk.StringVar(value=str(port or saved.get("port", CONTROL_PORT)))
+        self.subnet_var = tk.StringVar(value=str(saved.get("subnet", "")))
         self.status_var = tk.StringVar(value="Belum terhubung")
         self.bright_var = tk.DoubleVar(value=100)
         self.ct_var = tk.DoubleVar(value=4000)
@@ -154,7 +155,9 @@ class YeelightGui(tk.Tk):
         self.after(50, self._drain)
         self.log("Siap. Masukkan IP bulb atau klik Cari.", "muted")
         if self.ip_var.get().strip():
-            self.after(500, self.connect)
+            # A saved IP may be stale (DHCP); the failed connect triggers a
+            # subnet scan so the bulb is found again automatically.
+            self.after(500, lambda: self.connect(fallback_scan=True))
 
     # ------------------------------------------------------------------ setup
 
@@ -169,7 +172,13 @@ class YeelightGui(tk.Tk):
             path = _config_path()
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
-                json.dumps({"ip": self.ip_var.get().strip(), "port": self.port_var.get()}),
+                json.dumps(
+                    {
+                        "ip": self.ip_var.get().strip(),
+                        "port": self.port_var.get(),
+                        "subnet": self.subnet_var.get().strip(),
+                    }
+                ),
                 encoding="utf-8",
             )
         except OSError:
@@ -324,6 +333,10 @@ class YeelightGui(tk.Tk):
         self.port_entry = ttk.Entry(row, textvariable=self.port_var, width=7)
         self.port_entry.pack(side="left", padx=(8, 14))
         ttk.Button(row, text="Cari bulb", command=self.discover_devices).pack(side="left")
+        self.scan_button = ttk.Button(
+            row, text="Pindai subnet", command=self.scan_devices
+        )
+        self.scan_button.pack(side="left", padx=(8, 0))
         self.connect_button = ttk.Button(
             row, text="Hubungkan", style="Accent.TButton", command=self.connect
         )
@@ -334,6 +347,18 @@ class YeelightGui(tk.Tk):
         ttk.Button(row, text="Pairing Wi-Fi (Reset)", command=self.setup_wifi).pack(
             side="left", padx=(8, 0)
         )
+
+        subnet_row = tk.Frame(connection, bg=PANEL, padx=14, pady=0)
+        subnet_row.pack(fill="x", pady=(0, 10))
+        ttk.Label(subnet_row, text="Subnet", style="Panel.TLabel").pack(side="left")
+        ttk.Entry(subnet_row, textvariable=self.subnet_var, width=18).pack(
+            side="left", padx=(8, 10)
+        )
+        ttk.Label(
+            subnet_row,
+            text="kosongkan = semua jaringan lokal · IP lampu berubah? klik Pindai subnet",
+            style="PanelMuted.TLabel",
+        ).pack(side="left")
 
         notebook = ttk.Notebook(outer)
         notebook.grid(row=2, column=0, sticky="nsew")
@@ -895,10 +920,79 @@ class YeelightGui(tk.Tk):
 
         self._run(work, done, failed)
 
-    def connect(self) -> None:
+    def scan_devices(self) -> None:
+        """Walk the whole subnet over TCP 55443 — the cure for a changed IP."""
+        subnet = self.subnet_var.get().strip() or None
+        self.scan_button.configure(state="disabled")
+        self._set_status("Memindai subnet…", ACCENT)
+        self.log(
+            f"Memindai {subnet or 'semua jaringan lokal (/24)'} pada TCP {CONTROL_PORT}… "
+            "bisa 5-20 detik.",
+            "muted",
+        )
+
+        def work() -> list[Any]:
+            return scan_lan(subnet, timeout=0.25, identify_timeout=2.0)
+
+        def done(hits: list[Any]) -> None:
+            self.scan_button.configure(state="normal")
+            bulbs = [hit for hit in hits if hit.is_bulb]
+            others = [hit for hit in hits if not hit.is_bulb]
+            if bulbs:
+                self.ip_box.configure(values=[hit.ip for hit in bulbs])
+                for hit in bulbs:
+                    self.log(f"Lampu ditemukan: {hit.label}", "ok")
+                for hit in others:
+                    self.log(f"Port terbuka, bukan Yeelight: {hit.ip}", "muted")
+
+                current = self.ip_var.get().strip()
+                if len(bulbs) == 1:
+                    hit = bulbs[0]
+                    if current and current != hit.ip:
+                        self.log(f"IP berubah: {current} → {hit.ip}. Menghubungkan ulang…", "accent")
+                    self.ip_var.set(hit.ip)
+                    self._set_status("Lampu ditemukan, menghubungkan…", ACCENT)
+                    self.connect(interactive=False)
+                    return
+                if current not in {hit.ip for hit in bulbs}:
+                    self.ip_var.set(bulbs[0].ip)
+                self._set_status(f"{len(bulbs)} lampu ditemukan", MUTED)
+                self.log(
+                    "Lebih dari satu lampu ditemukan — pilih IP di kotak lalu klik Hubungkan.",
+                    "muted",
+                )
+                return
+
+            self._set_status("Tidak ada lampu", RED)
+            if others:
+                self.log(
+                    "Port 55443 terbuka di "
+                    + ", ".join(hit.ip for hit in others)
+                    + " tapi tidak ada yang menjawab sebagai Yeelight.",
+                    "error",
+                )
+            else:
+                self.log(
+                    "Tidak ada host dengan TCP 55443 di jaringan ini. "
+                    "Pastikan PC dan lampu satu jaringan, lalu isi subnet manual "
+                    "(mis. 192.168.1.0/24).",
+                    "error",
+                )
+
+        def failed(exc: Exception) -> None:
+            self.scan_button.configure(state="normal")
+            self._set_status("Pindai gagal", RED)
+            self.log(f"Pindai subnet gagal: {exc}", "error")
+
+        self._run(work, done, failed)
+
+    def connect(self, interactive: bool = True, fallback_scan: bool = False) -> None:
         ip = self.ip_var.get().strip()
         if not ip:
-            messagebox.showwarning("IP kosong", "Masukkan IP bulb atau klik Cari bulb.")
+            if fallback_scan:
+                self.scan_devices()
+            else:
+                messagebox.showwarning("IP kosong", "Masukkan IP bulb atau klik Cari bulb.")
             return
         try:
             port = int(self.port_var.get())
@@ -927,7 +1021,7 @@ class YeelightGui(tk.Tk):
                     "TCP 55443 menolak. LAN Control belum aktif; mencoba jalur miIO…",
                     "error",
                 )
-                if messagebox.askyesno(
+                if interactive and messagebox.askyesno(
                     "LAN Control OFF",
                     "Port 55443 menolak koneksi.\n\n"
                     "Coba buka LAN Control lewat miIO sekarang?\n"
@@ -936,11 +1030,21 @@ class YeelightGui(tk.Tk):
                     self.unlock_lan()
             else:
                 self._set_status("Gagal terhubung", RED)
-                self.log(f"Koneksi gagal: {exc}", "error")
-                messagebox.showerror(
-                    "Tidak bisa terhubung",
-                    f"{exc}\n\nPeriksa IP, jaringan 2.4 GHz, dan firewall.",
+                self.log(f"Koneksi gagal ke {ip}: {exc}", "error")
+                if fallback_scan and not self._closing:
+                    self.log("IP tersimpan tidak menjawab. Memindai subnet otomatis…", "muted")
+                    self.scan_devices()
+                    return
+                self.log(
+                    "Kalau IP lampu berubah, klik Pindai subnet untuk mencarinya lagi.",
+                    "muted",
                 )
+                if interactive:
+                    messagebox.showerror(
+                        "Tidak bisa terhubung",
+                        f"{exc}\n\nPeriksa IP, jaringan 2.4 GHz, dan firewall.\n"
+                        "IP lampu dinamis? Klik “Pindai subnet”.",
+                    )
 
         self._run(work, done, failed)
 
@@ -989,9 +1093,16 @@ class YeelightGui(tk.Tk):
     def _poll_failed(self, exc: Exception) -> None:
         if self._closing:
             return
+        was_connected = self.connected
         self.connected = False
         self._set_status("Terputus", RED)
         self.log(f"Polling gagal: {exc}", "error")
+        if was_connected:
+            self.log(
+                "Lampu tidak menjawab lagi. Kalau IP-nya berubah, klik Pindai subnet "
+                "untuk menemukannya kembali.",
+                "muted",
+            )
 
     def _refresh_device_info(self) -> None:
         ip = self.ip_var.get().strip()
