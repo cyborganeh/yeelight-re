@@ -9,7 +9,8 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Ubuntu 22.04 masih menyediakan Python 3.9 (ubuntu-latest = 26.04 tidak).
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
