@@ -19,7 +19,6 @@ struct ControlView: View {
     var body: some View {
         VStack(spacing: 12) {
             powerCard
-            brightnessCard
             colorCard
             temperatureCard
         }
