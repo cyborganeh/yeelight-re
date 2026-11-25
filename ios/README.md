@@ -42,6 +42,22 @@ atau AltStore memakai Apple ID biasa (tidak perlu akun developer berbayar).
 
 ---
 
+## Unduh IPA siap pakai
+
+Kalau tidak ingin memasang Xcode, IPA hasil build otomatis sudah tersedia di
+halaman [**Releases**](https://github.com/cyborganeh/yeelight-re/releases/tag/v0.4.0)
+repo ini. Unduh `yeelight-ios-0.1.0.ipa` (501.390 byte) lalu langsung ke bagian
+[sideload](#memasang-di-iphone-sideload).
+
+```
+sha256  dbddbfe8cbdd6815362a917ed64145574aff0a4e49671329fed3d85a5aa13f4c
+```
+
+Cek di Mac/Linux dengan `shasum -a 256 yeelight-ios-0.1.0.ipa`, di Windows
+dengan `Get-FileHash .\yeelight-ios-0.1.0.ipa -Algorithm SHA256`.
+
+---
+
 ## Membangun IPA
 
 Di Mac:
