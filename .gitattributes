@@ -1,0 +1,4 @@
+* text=auto
+
+# Skrip shell harus tetap LF walau di-clone di Windows.
+*.sh text eol=lf

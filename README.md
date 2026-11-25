@@ -14,6 +14,7 @@ Tool ini **tidak pernah login** ke akun Yeelight, Mi Home, atau cloud mana pun. 
 
 ## Daftar Isi
 - [Download & Langsung Pakai (Windows)](#download--langsung-pakai-windows)
+- [Versi iPhone (iOS)](#versi-iphone-ios)
 - [Status Fitur](#status-fitur)
 - [Panduan Penggunaan](#panduan-penggunaan)
   - [1. Desktop GUI (Paling Mudah)](#1-desktop-gui-paling-mudah)
@@ -44,6 +45,42 @@ Executable ini **tidak membutuhkan instalasi Python, akun, atau koneksi internet
 
 > [!TIP]
 > Karena executable dibuat lokal dan belum ditandatangani sertifikat berbayar, Windows SmartScreen mungkin menampilkan peringatan saat pertama kali dijalankan. Klik **More info** → **Run anyway**.
+
+---
+
+## Versi iPhone (iOS)
+
+Aplikasi **native SwiftUI** untuk iPhone tersedia di folder [`ios/`](ios/README.md).
+Semua logika protokol (`protocol.py`, `client.py`, `discovery.py`, `miio.py`)
+diporting langsung ke Swift tanpa dependency pihak ketiga.
+
+| Aspek | Keterangan |
+|---|---|
+| Minimum iOS | 16.0 |
+| Fitur | Kontrol daya/warna/CT, 9 scene, 5 flow, timer, ganti nama, raw command, **pindai subnet TCP 55443**, miIO LAN Control |
+| Tidak ada | Login, cloud, telemetri, iklan, langganan |
+| Distribusi | **IPA unsigned** yang Anda tandatangani sendiri dengan Apple ID gratis via Sideloadly / AltStore |
+
+### Cara build (di Mac)
+
+```bash
+cd yeelight-re/ios
+bash build.sh
+```
+
+Hasil: `dist/yeelight-ios-0.1.0.ipa` — lalu pasang dengan Sideloadly atau
+AltStore. Apple ID gratis cukup; tidak perlu akun developer berbayar.
+
+> [!IMPORTANT]
+> - IPA **belum** ikut di repo karena harus dikompilasi dengan Xcode di macOS.
+>   Skrip build menyiapkan semuanya otomatis (termasuk `xcodegen` bila belum ada).
+> - Tanda tangan Apple ID gratis berlaku **7 hari**, lalu app harus ditandatangani
+>   ulang. Sideloadly/AltStore bisa memperbarui otomatis.
+> - Saat pertama memindai, iOS akan meminta izin **Local Network** — wajib
+>   **Allow**, kalau tidak lampu tidak akan ditemukan.
+
+Detail lengkap, termasuk troubleshooting izin dan alternatif AltStore, ada di
+[`ios/README.md`](ios/README.md).
 
 ---
 
@@ -393,7 +430,11 @@ yeelight-re/
 │   ├── TANPA-LOGIN.md       # Analisis bebas akun & cloud
 │   └── HARDWARE.md          # Teardown, UART, & modifikasi hardware
 ├── packaging/               # Asset PyInstaller, icon, dan launcher
-├── dist/                    # Executable siap pakai (.exe & .zip)
+├── ios/                     # Aplikasi iPhone (SwiftUI) — lihat ios/README.md
+│   ├── project.yml          # Definisi proyek XcodeGen
+│   ├── build.sh             # Build unsigned + kemas IPA
+│   └── YeelightApp/         # Source Swift (Core, Store, Views)
+├── dist/                    # Executable siap pakai (.exe & .zip) + IPA hasil build
 └── build_exe.ps1            # Skrip otomatisasi build Windows
 ```
 
