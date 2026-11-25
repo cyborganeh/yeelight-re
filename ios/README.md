@@ -65,6 +65,20 @@ Keluaran:
 yeelight-re/dist/yeelight-ios-0.1.0.ipa
 ```
 
+### Tanpa Mac (GitHub Actions)
+
+Repo ini punya workflow `.github/workflows/ios.yml`. Setiap push yang menyentuh
+folder `ios/` (atau lewat **Actions → iOS IPA → Run workflow**) akan:
+
+1. checkout di runner macOS milik GitHub,
+2. memasang XcodeGen,
+3. menjalankan `ios/build.sh`,
+4. mengunggah IPA sebagai artifact `yeelight-ios-ipa` (tersimpan 30 hari).
+
+Unduh artifact dari tab **Actions** → pilih run terbaru → **Artifacts**.
+Cocok kalau Mac sedang tidak tersedia; runner ini juga yang memverifikasi kode
+Swift benar-benar bisa dikompilasi.
+
 ### Kalau ingin membuka di Xcode
 
 ```bash

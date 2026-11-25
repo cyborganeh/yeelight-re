@@ -1,0 +1,44 @@
+name: iOS IPA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build IPA
+        working-directory: ios
+        run: bash build.sh
+
+      - name: Inspect IPA
+        run: |
+          ls -lh dist
+          unzip -l dist/yeelight-ios-0.1.0.ipa | sed -n '1,25p'
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: yeelight-ios-ipa
+          path: dist/*.ipa
+          if-no-files-found: error
+          retention-days: 30
