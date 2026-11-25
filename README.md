@@ -61,6 +61,13 @@ diporting langsung ke Swift tanpa dependency pihak ketiga.
 | Tidak ada | Login, cloud, telemetri, iklan, langganan |
 | Distribusi | **IPA unsigned** yang Anda tandatangani sendiri dengan Apple ID gratis via Sideloadly / AltStore |
 
+### Unduh IPA siap pakai
+
+IPA hasil build otomatis tersedia di halaman
+[**Releases**](https://github.com/cyborganeh/yeelight-re/releases) repo ini
+(asset `yeelight-ios-0.1.0.ipa`). Tidak perlu Mac untuk memakainya — cukup
+Sideloadly/AltStore.
+
 ### Cara build (di Mac)
 
 ```bash
